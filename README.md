@@ -41,6 +41,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize ASR (downloads models on first run)
     audio.init_asr()?;
 
+    // Or initialize ASR in an app-managed directory
+    // audio.init_asr_at_path("/path/to/app/models/parakeet-tdt-0.6b-v3-coreml")?;
+
     // Transcribe an audio file
     let result = audio.transcribe_file("audio.wav")?;
     println!("Text: {}", result.text);

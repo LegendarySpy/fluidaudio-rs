@@ -14,12 +14,34 @@ class FluidAudioBridgeInternal {
     init() {}
 
     func initializeAsr() throws {
+        try initializeAsr(modelDirectory: nil)
+    }
+
+    func initializeAsr(modelDirectory: String?) throws {
         let semaphore = DispatchSemaphore(value: 0)
         var initError: Error?
 
         Task {
             do {
-                let models = try await AsrModels.downloadAndLoad()
+                let models: AsrModels
+                if let modelDirectory {
+                    let directory = URL(fileURLWithPath: modelDirectory, isDirectory: true).standardizedFileURL
+                    let version = Self.inferAsrVersion(from: directory)
+
+                    try FileManager.default.createDirectory(
+                        at: directory,
+                        withIntermediateDirectories: true,
+                        attributes: nil
+                    )
+
+                    if AsrModels.modelsExist(at: directory, version: version) {
+                        models = try await AsrModels.load(from: directory, version: version)
+                    } else {
+                        models = try await AsrModels.downloadAndLoad(to: directory, version: version)
+                    }
+                } else {
+                    models = try await AsrModels.downloadAndLoad()
+                }
                 self.asrModels = models
 
                 let manager = AsrManager()
@@ -36,6 +58,14 @@ class FluidAudioBridgeInternal {
         if let error = initError {
             throw error
         }
+    }
+
+    private static func inferAsrVersion(from directory: URL) -> AsrModelVersion {
+        let lowercased = directory.path.lowercased()
+        if lowercased.contains("v2") {
+            return .v2
+        }
+        return .v3
     }
 
     func transcribeFile(_ path: String) throws -> (String, Float, Double, Double, Float) {
@@ -143,6 +173,22 @@ public func fluidaudio_initialize_asr(_ ptr: UnsafeMutableRawPointer?) -> Int32 
         return 0
     } catch {
         print("ASR init error: \(error)")
+        return -1
+    }
+}
+
+@_cdecl("fluidaudio_initialize_asr_at_path")
+public func fluidaudio_initialize_asr_at_path(
+    _ ptr: UnsafeMutableRawPointer?,
+    _ modelDir: UnsafePointer<CChar>?
+) -> Int32 {
+    guard let ptr = ptr, let modelDir = modelDir else { return -1 }
+    let bridge = Unmanaged<FluidAudioBridgeInternal>.fromOpaque(ptr).takeUnretainedValue()
+    do {
+        try bridge.initializeAsr(modelDirectory: String(cString: modelDir))
+        return 0
+    } catch {
+        print("ASR init (path) error: \(error)")
         return -1
     }
 }

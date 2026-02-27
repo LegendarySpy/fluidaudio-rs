@@ -89,6 +89,18 @@ impl FluidAudio {
         self.bridge.initialize_asr().map_err(FluidAudioError::from)
     }
 
+    /// Initialize ASR using a caller-managed model directory.
+    ///
+    /// If the directory already contains ASR models, those are loaded directly.
+    /// Otherwise models are downloaded and cached into the provided directory.
+    pub fn init_asr_at_path<P: AsRef<Path>>(&self, model_dir: P) -> Result<(), FluidAudioError> {
+        let model_dir = model_dir.as_ref();
+        let model_dir_str = model_dir.to_string_lossy();
+        self.bridge
+            .initialize_asr_at_path(&model_dir_str)
+            .map_err(FluidAudioError::from)
+    }
+
     /// Transcribe an audio file
     ///
     /// # Arguments
